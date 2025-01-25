@@ -146,9 +146,10 @@
     async function sendMessage() {
         let message = document.getElementById("sendBox").value;
         let user = document.getElementById("username").value;
+        let chat = document.getElementById("activeChatroom").value;
         const res = await fetch("/message", {
             method: "POST",
-            body: JSON.stringify({ Body: message, Sender: user })
+            body: JSON.stringify({ Body: message, Sender: user, Channel: chat })
         })
 
         document.getElementById("sendBox").value = ""
@@ -157,10 +158,47 @@
     function closeModal() {
         let modal = document.getElementById("joinModalContainer")
         modal.classList.add("hidden")
+
+        //clear existing inputs
+        document.getElementById("newChatName").value = "";
+        document.getElementById("newChatKey").value = "";
     }
     function openModal() {
         let modal = document.getElementById("joinModalContainer")
         modal.classList.remove("hidden")
+    }
+
+    function createChatroom() {
+        let name = document.getElementById("newChatName").value
+        // let key = document.getElementById("newChatKey").value
+
+        //create the tab in the navbar
+        let navbar = document.getElementById("roomManager")
+        $(
+            `<div class="chatroom" id="chatBtn-${name}" onclick="setActiveChat('${name}')">${name}</div>`
+        ).insertBefore(`#newChatBtn`)
+
+        //create the chat window
+        $("#messageBody").append(`<div id="chatroom-${name}" class="chatWindow">`)
+        //set to the current chat to the new one
+        setActiveChat(name)
+    }
+
+    function setActiveChat(name) {
+        let active = document.getElementsByClassName("activeChatroom");
+
+        //remove active chat from current active button
+        active[0].classList.remove("activeChatroom");
+
+        //set the active chat to the target
+        document.getElementById(`chatBtn-${name}`).classList.add("activeChatroom");
+        document.getElementById("activeChatroom").value = name
+
+        //switch the chat window
+        Array.from(document.getElementsByClassName("chatWindow")).forEach(e => {
+            e.classList.add('hidden');
+        })
+        document.getElementById(`chatroom-${name}`).classList.remove('hidden')
     }
 </script>
 
@@ -175,13 +213,13 @@
             </div>
             <div>
                 <h2>Join or create a room</h2>
-                <form>
+                <div>
                     <label>Room Code</label>
-                    <input type="text">
+                    <input type="text" id="newChatName">
                     <label>Encryption Key</label>
-                    <input type="text">
-                    <input type="submit" value="Create">
-                </form>
+                    <input type="text" id="newChatkey">
+                    <button onclick="createChatroom()">Go!</button>
+                </div>
             </div>
         </div>
     </div>
@@ -189,13 +227,14 @@
         <input type="text" id="username" placeholder="username">
 
         <div id="roomManager">
-            <div class="chatroom activeChatroom">Main</div>
-            <div class="chatroom" onclick="openModal()">+</div>
+            <div class="chatroom activeChatroom" id="chatBtn-Main" onclick="setActiveChat('Main')">Main</div>
+            <div class="chatroom" id="newChatBtn" onclick="openModal()">+</div>
         </div>
+        <input type="hidden" id="activeChatroom" value="Main">
         <div id="messageBody">
-            <!-- <div id="chatroom-Main">
+            <div id="chatroom-Main" class="chatWindow">
 
-            </div> -->
+            </div>
         </div>
         <div id="messageBox">
             <input type="text" id="sendBox" placeholder="Type a message here...">
@@ -218,7 +257,7 @@
         //senders name that is shown on messages
         var author = data.Sender;
         //stack messages from the same sender
-        if (document.getElementById("messageBody").children.length > 0) {
+        if (document.getElementById(`chatroom-${data.Channel}`).children.length > 0) {
             let lastID = data.ID - 1
             let lastMsg = document.getElementById(`msg-${lastID}`)
             console.log(lastMsg.children)
@@ -227,7 +266,16 @@
             }
         }
 
-        $('#messageBody').append(`        <div class="message" id="msg-${data.ID}">
+        var room = data.Channel
+
+        //guard against reading messages for rooms you aren't a part of
+        if (document.getElementById(`chatroom-${room}`) == undefined) {
+            console.log("Message from other room")
+            return;
+        }
+
+
+        $(`#chatroom-${room}`).append(`        <div class="message" id="msg-${data.ID}">
             <p class="sender">${author}</p>
             <p class="body">${data.Body}</p>
             <input type="hidden" value="${data.Sender}">
