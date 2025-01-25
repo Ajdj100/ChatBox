@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Server Sent Event</title>
+</head>
+
+<style>
+    body {
+        margin: 0;
+    }
+
+    .page {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        height: 90vh;
+        width: 90vw;
+        margin: auto;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        overflow-y: hidden;
+        overflow: visible;
+    }
+
+    #messageBody {
+        background-color: rgb(222, 229, 236);
+        display: flex;
+        flex-direction: column;
+        border-radius: 0 0 10px 10px;
+        height: 100%;
+        width: 100%;
+        padding: 15px;
+        overflow-y: scroll;
+    }
+
+    .message>* {
+        margin: 0;
+    }
+
+    .sender {
+        font-weight: 700;
+    }
+
+    .body {
+        font-weight: 400;
+    }
+
+    #messageBox {
+        padding: 15px;
+        background-color: rgb(222, 229, 236);
+        border-radius: 10px;
+        width: 100%;
+        margin-top: 10px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    #messageBox>input {
+        background: none;
+        border: none;
+        outline: none;
+        flex: 1;
+
+    }
+
+    #roomManager {
+        border-radius: 15px 0px 0px 0px;
+        overflow: hidden;
+        background-color: rgb(222, 229, 236);
+        border-bottom: 2px solid rgb(255, 255, 255);
+
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .chatroom {
+        padding: 10px;
+        padding-bottom: 10px;
+        padding-top: 9px;
+        width: fit-content;
+        cursor: pointer;
+    }
+
+    .activeChatroom {
+        background-color: rgb(50, 130, 201);
+    }
+
+    #joinModalContainer {
+        /* background-color: rgba(0, 0, 0, 0.425); */
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        border: none;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    #joinModalBG {
+        background-color: rgba(36, 36, 36, 0.452);
+        width: 100vw;
+        height: 100vh;
+        position: absolute;
+    }
+
+    #joinModal {
+        background-color: rgb(222, 229, 236);
+        width: 600px;
+        height: 300px;
+        border-radius: 15px;
+        padding: 10px;
+
+        /* positioning */
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -70%);
+
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    #joinModal>div:not(.divider) {
+        flex: 1;
+        text-align: center;
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    .divider {
+        width: 3px;
+        height: 85%;
+        background-color: rgb(153, 153, 153);
+        margin: auto;
+    }
+</style>
+
+<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+<script>
+    async function sendMessage() {
+        let message = document.getElementById("sendBox").value;
+        let user = document.getElementById("username").value;
+        const res = await fetch("/message", {
+            method: "POST",
+            body: JSON.stringify({ Body: message, Sender: user })
+        })
+
+        document.getElementById("sendBox").value = ""
+    }
+
+    function closeModal() {
+        let modal = document.getElementById("joinModalContainer")
+        modal.classList.add("hidden")
+    }
+    function openModal() {
+        let modal = document.getElementById("joinModalContainer")
+        modal.classList.remove("hidden")
+    }
+</script>
+
+<body>
+    <div id="joinModalContainer" class="hidden">
+        <div id="joinModalBG" onclick="closeModal()">
+        </div>
+        <div id="joinModal">
+            <div style="position: absolute; right: 0; transform: translate(-100%, 0); cursor: pointer;"
+                onclick="closeModal()">
+                X
+            </div>
+            <div>
+                <h2>Join or create a room</h2>
+                <form>
+                    <label>Room Code</label>
+                    <input type="text">
+                    <label>Encryption Key</label>
+                    <input type="text">
+                    <input type="submit" value="Create">
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="page">
+        <input type="text" id="username" placeholder="username">
+
+        <div id="roomManager">
+            <div class="chatroom activeChatroom">Main</div>
+            <div class="chatroom" onclick="openModal()">+</div>
+        </div>
+        <div id="messageBody">
+            <!-- <div id="chatroom-Main">
+
+            </div> -->
+        </div>
+        <div id="messageBox">
+            <input type="text" id="sendBox" placeholder="Type a message here...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+
+    </div>
+</body>
+
+
+<script>
+    document.getElementById("sendBox").addEventListener("keypress", function (event) { if (event.keyCode == 13) { sendMessage() } });
+
+
+    // EventSource object of javascript listens the streaming events from our go server and prints the message.
+    var stream = new EventSource("/stream");
+    stream.addEventListener("message", function (e) {
+        var data = JSON.parse(e.data)
+
+        //senders name that is shown on messages
+        var author = data.Sender;
+        //stack messages from the same sender
+        if (document.getElementById("messageBody").children.length > 0) {
+            let lastID = data.ID - 1
+            let lastMsg = document.getElementById(`msg-${lastID}`)
+            console.log(lastMsg.children)
+            if (data.Sender == lastMsg.children[2].value) {
+                author = ""
+            }
+        }
+
+        $('#messageBody').append(`        <div class="message" id="msg-${data.ID}">
+            <p class="sender">${author}</p>
+            <p class="body">${data.Body}</p>
+            <input type="hidden" value="${data.Sender}">
+        </div>`)
+
+        const element = document.getElementById("messageBody");
+        element.scrollTop = element.scrollHeight;
+
+
+        console.log(data);
+    });
+</script>
+
+</html>
